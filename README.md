@@ -13,4 +13,4 @@
 
  weight is mainly for liquids to see what sinks
  
- When 2 CA or "chemicals" collied their a1 and a2 values are run through the reaction function if they react then their ids are hashed and an element's new variables are calculated and it's changed into a new element.
+ When 2 chemicals collied their a1 and a2 values are run through the reaction function if they react then their ids are hashed and an element's new variables are calculated and it's changed into a new element.
