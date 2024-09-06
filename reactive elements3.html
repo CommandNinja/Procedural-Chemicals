@@ -1,0 +1,207 @@
+<canvas style="position: absolute; top: 0; left: 0;" id="canvas" width="512" height="512">
+<script>
+var canvas = document.getElementById("canvas")
+var ctx = canvas.getContext("2d");
+
+var res = 8
+
+var gridw = Math.floor(canvas.width/res)
+var gridh = Math.floor(canvas.height/res)
+var gridsize = gridh*gridw
+
+var reactRange = .1
+var reactWithSelfElementChance = .5
+
+var startingType = .1//.869//.279//.5256
+while (true) {
+  let testingData = getDataFromSeed(startingType)
+  if (testingData[2]<reactWithSelfElementChance&&isReactive(testingData[0], testingData[1], testingData[0], testingData[1])) break
+  startingType = Math.floor(Math.random()*1e4)/1e4
+}
+//alert(startingType)
+//alert(getDataFromSeed(startingType)[2])
+
+var cells = []
+for (var i=0; i<1000; i++) {
+  let cx = Math.floor(Math.random()*gridw/3)+Math.floor(gridw/3)
+  let cy = Math.floor(Math.random()*gridh)
+  if (!isSolid(cx, cy)) cells.push({x: cx, y: cy, type: startingType, data: getDataFromSeed(startingType)})
+}
+//for (var i=0; i<128; i++) {
+//  let cx = Math.floor(Math.random()*gridw/2)
+//  let cy = Math.floor(Math.random()*gridh)
+//  if (!isSolid(cx, cy)) cells.push({x: cx, y: cy, type: 3, data: getDataFromSeed(3)})
+//}
+
+var c = 0
+function update() {
+  c++
+
+  for (var i=0; i<cells.length; i++) {
+    updateCell(cells[i])
+  }
+
+  ctx.fillStyle = "lightgray"
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.globalAlpha = 0.6
+  for (var i=0; i<cells.length; i++) {
+//    ctx.fillStyle = "black"
+    ctx.fillStyle = "rgb("+cells[i].data[4][0]+", "+cells[i].data[4][1]+", "+cells[i].data[4][2]+")"
+//    ctx.fillStyle = "rgb("+((cells[i].data[3]==2)*255)+", "+((cells[i].data[3]==0)*255)+", "+((cells[i].data[3]==1)*255)+")"
+//    ctx.globalAlpha = (cells[i].data[5]-cells[i].data[3])
+    ctx.fillRect(cells[i].x*res, cells[i].y*res, res, res)
+  }
+  ctx.globalAlpha = 1
+  ctx.fillStyle = "black"
+  ctx.font = "30px serif";
+  ctx.fillText(Math.floor(Date.now()/1000), 10, 30);
+  ctx.fillText(startingType, 10, 60);
+}
+setInterval(update, 0)
+
+function getDataFromSeed(seed) {
+  let returnData = []
+  returnData.push(random(seed+.1))//a1
+  returnData.push(random(seed+.2))//a2
+  returnData.push(random(seed+.3))//can react with same element
+  returnData.push(Math.floor(random(seed+.4)*3))//physics type
+  returnData.push([Math.floor(random(seed+.5)*255), Math.floor(random(seed+.6)*255), Math.floor(random(seed+.7)*255)])//colors
+  returnData.push(returnData[3]+random(seed+.8)*.9)// weight
+  return returnData
+}
+
+function isReactive(a1, a2, b1, b2) {
+  return Math.abs((a1+b1)-(a2+b2))<reactRange
+}
+
+function updateCell(cell) {
+  physics(cell)
+  let touched = []
+  touched.push(getCell(cell.x+1, cell.y))
+  touched.push(getCell(cell.x, cell.y+1))
+  touched.push(getCell(cell.x-1, cell.y))
+  touched.push(getCell(cell.x, cell.y-1))
+  touched = touched.filter((a) => a > -1)
+  if (touched.length>0) {
+    let reactAgainst = cells[touched[Math.floor(touched.length*Math.random())]]
+    if (!(cell.type==reactAgainst.type&&cell.data[2]>reactWithSelfElementChance)) {//if cells aren't (the same type and can effect self)
+      if (isReactive(cell.data[0], cell.data[1], reactAgainst.data[0], reactAgainst.data[1])) {
+        cell.type = random(cell.type+reactAgainst.type)
+        cell.data = getDataFromSeed(cell.type)
+      }
+    }
+  }
+}
+
+function physics(cell) {
+  if (cell.data[3]==0) {//air
+    let moveOptions = []
+    moveOptions.push([isSolid(cell.x+1, cell.y),1,0])
+    moveOptions.push([isSolid(cell.x, cell.y+1),0,1])
+    moveOptions.push([isSolid(cell.x-1, cell.y),-1,0])
+    moveOptions.push([isSolid(cell.x, cell.y-1),0,-1])
+    moveOptions = moveOptions.filter((a) => !a[0])
+    if (moveOptions.length>0) {
+      choosenOption = moveOptions[Math.floor(moveOptions.length*Math.random())]
+      cell.x += choosenOption[1]
+      cell.y += choosenOption[2]
+    }
+  } else if (cell.data[3]==1) {//water
+    let moveData = canMove(cell, 0, 1)
+    if (moveData[0]) {
+      if (moveData.length>1) {
+        swapCells(cell, cells[moveData[1]])
+      } else {
+        cell.y++
+      }
+    } else {
+      let moveOptions = []
+      moveOptions.push([canMove(cell, 1, 0),1,0])
+      moveOptions.push([canMove(cell, -1, 0),-1,0])
+      moveOptions = moveOptions.filter((a) => a[0][0])
+      if (moveOptions.length>0) {
+        choosenOption = moveOptions[Math.floor(moveOptions.length*Math.random())]
+        if (choosenOption[0].length>1) {
+          swapCells(cell, cells[choosenOption[0][1]])
+        } else {
+          cell.x += choosenOption[1]
+          cell.y += choosenOption[2]
+        }
+      }
+    }
+  } else if (cell.data[3]==2) {//sand
+    let moveData = canMove(cell, 0, 1)
+    if (moveData[0]) {
+      if (moveData.length>1) {
+        swapCells(cell, cells[moveData[1]])
+      } else {
+        cell.y++
+      }
+    } else {
+      let moveOptions = []
+      moveOptions.push([isSolid(cell.x+1, cell.y),canMove(cell, 1, 1),1,1])
+      moveOptions.push([isSolid(cell.x-1, cell.y),canMove(cell, -1, 1),-1,1])
+      moveOptions = moveOptions.filter((a) => (!a[0])&&a[1][0])
+//      moveOptions = moveOptions.filter((a) => !a[0])
+      if (moveOptions.length>0) {
+        choosenOption = moveOptions[Math.floor(moveOptions.length*Math.random())]
+        if (choosenOption[1].length>1) {
+          swapCells(cell, cells[choosenOption[1][1]])
+        } else {
+          cell.x += choosenOption[2]
+          cell.y += choosenOption[3]
+        }
+      }
+    }
+  }
+}
+
+function canMove(cell, x, y) {
+  if (outSideWalls(cell.x+x, cell.y+y)) return [0]
+  let spotCell = getCell(cell.x+x, cell.y+y)
+  if (spotCell<0) {
+    return [1]
+  } else if (cell.data[5]>cells[spotCell].data[5]) {
+    if (!(cell.data[3] == 2 && cells[spotCell].data[3] == 2)) return [1,spotCell]
+  }
+  return [0]
+}
+
+function swapCells(cell, cell2) {
+  let temp = cell.x
+  cell.x = cell2.x
+  cell2.x = temp
+  temp = cell.y
+  cell.y = cell2.y
+  cell2.y = temp
+}
+
+function getCell(x, y) {
+  for (var j=0; j<cells.length; j++) {
+    if (cells[j].x==x&&cells[j].y==y) return j
+  }
+  return -1
+}
+
+function isSolid(x, y) {
+  if (outSideWalls(x, y)) return true
+  for (var j=0; j<cells.length; j++) {
+    if (cells[j].x==x&&cells[j].y==y) return true
+  }
+  return false
+}
+
+function outSideWalls(x, y) {
+  if (x>gridw-1) return true
+  if (x<0) return true
+  if (y>gridh-1) return true
+  if (y<0) return true
+  return false
+}
+
+function random(seed) {
+  let r = Math.sin(seed) * 10000
+  return r - Math.floor(r)
+}
+
+</script>
